@@ -2,6 +2,14 @@ import functools
 
 
 @functools.lru_cache(maxsize=None)
+def pydantic_version() -> int:
+    from pydantic import __version__
+
+    version = __version__.split(".")
+    return int(version[0])
+
+
+@functools.lru_cache(maxsize=None)
 def disable_pydantic_v2_warning():
     """
     Disables the Pydantic version 2 warning by filtering out the related warnings.
