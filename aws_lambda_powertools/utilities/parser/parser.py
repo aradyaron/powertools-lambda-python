@@ -1,13 +1,15 @@
+import itertools
 import logging
-from typing import Any, Callable, Dict, Optional, Type, overload
+from typing import Any, Callable, Dict, List, Optional, Type, Union, overload
 
 from aws_lambda_powertools.utilities.parser.compat import disable_pydantic_v2_warning
+from aws_lambda_powertools.utilities.parser.models.raw_event import RawEvent
 from aws_lambda_powertools.utilities.parser.types import EventParserReturnType, Model
 
 from ...middleware_factory import lambda_handler_decorator
 from ..typing import LambdaContext
 from .envelopes.base import Envelope
-from .exceptions import InvalidEnvelopeError, InvalidModelTypeError
+from .exceptions import InvalidEnvelopeChaining, InvalidEnvelopeError, InvalidModelTypeError
 
 logger = logging.getLogger(__name__)
 
@@ -165,3 +167,34 @@ def parse(event: Dict[str, Any], model: Type[Model], envelope: Optional[Type[Env
         return model.parse_obj(event)
     except AttributeError:
         raise InvalidModelTypeError(f"Input model must implement BaseModel, model={model}")
+
+
+def _chained_parse(events: List[Dict[str, Any]], model: Type[Model], envelopes: List[Type[Envelope]]) -> List:
+    print(type(envelopes))
+    if len(envelopes) == 1:
+        envelope = envelopes[0]
+        print(f"{events=}, {model=}, {envelope=}")
+        res = [parse(event=event, model=model, envelope=envelope) for event in events]
+        if isinstance(res[0], List):
+            return list(itertools.chain.from_iterable(res))
+        return res
+
+    envelope = envelopes[0]
+    dict_events = []
+    for event in events:
+        parsed_event: Union[RawEvent, List[RawEvent]] = parse(event=event, model=RawEvent, envelope=envelope)
+        if isinstance(parsed_event, RawEvent):
+            dict_events.append(parsed_event.as_raw_dict())
+        elif isinstance(parsed_event, List) and isinstance(parsed_event[0], RawEvent):
+            dict_events.extend(x.as_raw_dict() for x in parsed_event)
+        else:
+            raise InvalidEnvelopeChaining(
+                f"Return type expected is {RawEvent} or {List[RawEvent]}, "
+                f"received {type(parsed_event)} from envelope {envelope}",
+            )
+
+    return list(itertools.chain.from_iterable(_chained_parse(events=dict_events, model=model, envelopes=envelopes[1:])))
+
+
+def chained_parse(event: Dict[str, Any], model: Type[Model], envelopes: List[Type[Envelope]]) -> List:
+    return _chained_parse(events=[event], model=model, envelopes=envelopes)

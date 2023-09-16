@@ -1,8 +1,9 @@
 import json
+from typing import List
 
 import pytest
 
-from aws_lambda_powertools.utilities.parser import ValidationError, envelopes, parse
+from aws_lambda_powertools.utilities.parser import ValidationError, chained_parse, envelopes, parse
 from tests.functional.utils import load_event
 from tests.functional.validator.conftest import sns_event  # noqa: F401
 from tests.unit.parser.schemas import MyAdvancedSnsBusiness, MySnsBusiness
@@ -90,6 +91,19 @@ def test_handle_sns_trigger_event_no_envelope():
 def test_handle_sns_sqs_trigger_event_json_body():  # noqa: F811
     raw_event = load_event("snsSqsEvent.json")
     parsed_event: MySnsBusiness = parse(event=raw_event, model=MySnsBusiness, envelope=envelopes.SnsSqsEnvelope)
+
+    assert len(parsed_event) == 1
+    assert parsed_event[0].message == "hello world"
+    assert parsed_event[0].username == "lessa"
+
+
+def test_handle_sns_sqs_trigger_event_chained():  # noqa: F811
+    raw_event = load_event("snsSqsEvent.json")
+    parsed_event: List[MySnsBusiness] = chained_parse(
+        event=raw_event,
+        model=MySnsBusiness,
+        envelopes=[envelopes.SnsSqsEnvelope],
+    )
 
     assert len(parsed_event) == 1
     assert parsed_event[0].message == "hello world"

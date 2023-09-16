@@ -4,3 +4,7 @@ class InvalidEnvelopeError(Exception):
 
 class InvalidModelTypeError(Exception):
     """Input data model does not implement BaseModel"""
+
+
+class InvalidEnvelopeChaining(Exception):
+    """Input Envelopes combination does not support chaining"""
