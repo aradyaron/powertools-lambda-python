@@ -20,7 +20,7 @@ def event_parser(
     event: Dict[str, Any],
     context: LambdaContext,
     model: Type[Model],
-    envelope: Optional[Type[Envelope]] = None,
+    envelope: Optional[Union[Type[Envelope], List[Type[Envelope]]]] = None,
 ) -> EventParserReturnType:
     """Lambda handler decorator to parse & validate events using Pydantic models
 
@@ -82,7 +82,14 @@ def event_parser(
     InvalidEnvelopeError
         When envelope given does not implement BaseEnvelope
     """
-    parsed_event = parse(event=event, model=model, envelope=envelope) if envelope else parse(event=event, model=model)
+    parsed_event: Union[Model, List[Any], Any] = None
+    if not envelope:
+        parsed_event = parse(event=event, model=model)
+    elif isinstance(envelope, List):
+        parsed_event = chained_parse(event=event, model=model, envelopes=envelope)
+    else:
+        parsed_event = parse(event=event, model=model, envelope=envelope)
+
     logger.debug(f"Calling handler {handler.__name__}")
     return handler(parsed_event, context)
 
